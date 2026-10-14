@@ -3,7 +3,18 @@ import { MapContainer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { setWorkerUrl } from 'maplibre-gl';
+// @ts-ignore
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import maplibreGL from '@maplibre/maplibre-gl-leaflet';
+
+// Explicitly register MapLibre Web Worker for Vite so vector tiles decode properly
+try {
+  setWorkerUrl(workerUrl);
+} catch (err) {
+  console.warn('MapLibre worker registration:', err);
+}
+
 import { DistrictSummary, RankingItem, RecommendationItem, Language } from '../types';
 import {
   MapPin,
@@ -44,22 +55,67 @@ function MapViewController({ center, zoom }: { center: [number, number]; zoom: n
   return null;
 }
 
-// OpenFreeMap Vector Layer component (Exact map from user reference!)
+// OpenFreeMap Vector Layer component (Exact map from user reference with enhanced, crisp boundaries!)
 function OpenFreeMapLayer({ styleUrl }: { styleUrl: string }) {
   const map = useMap();
 
   useEffect(() => {
-    // @ts-ignore
-    const glLayer = (maplibreGL as any)({
-      style: styleUrl
-    });
-    glLayer.addTo(map);
+    let glLayer: any = null;
+    let isMounted = true;
+
+    async function initLayer() {
+      try {
+        const res = await fetch(styleUrl);
+        const style = await res.json();
+        
+        // Ensure state and national boundaries are sharply delineated at all zoom levels
+        if (style.layers && Array.isArray(style.layers)) {
+          for (const layer of style.layers) {
+            if (layer.id === 'boundary_3') {
+              // State / Provincial boundaries
+              layer.minzoom = 2;
+              if (!layer.paint) layer.paint = {};
+              layer.paint['line-color'] = '#475569'; // Slate-600 clear boundary
+              layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 2, 0.9, 6, 1.4, 11, 2.4];
+            } else if (layer.id === 'boundary_2') {
+              // International / Sovereign boundary
+              if (!layer.paint) layer.paint = {};
+              layer.paint['line-color'] = '#1e293b'; // Slate-800 dark border
+              layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 2, 1.4, 5, 2.2, 11, 3.8];
+            } else if (layer.id === 'boundary_disputed') {
+              if (!layer.paint) layer.paint = {};
+              layer.paint['line-color'] = '#334155';
+              layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 2, 1.4, 5, 2.2, 11, 3.8];
+            }
+          }
+        }
+
+        if (!isMounted) return;
+
+        // @ts-ignore
+        glLayer = (maplibreGL as any)({
+          style: style
+        });
+        glLayer.addTo(map);
+      } catch (e) {
+        // Fallback to direct style URL if fetch fails
+        if (!isMounted) return;
+        // @ts-ignore
+        glLayer = (maplibreGL as any)({
+          style: styleUrl
+        });
+        glLayer.addTo(map);
+      }
+    }
+
+    initLayer();
 
     return () => {
-      try {
-        map.removeLayer(glLayer);
-      } catch (err) {
-        // safe unmount
+      isMounted = false;
+      if (glLayer) {
+        try {
+          map.removeLayer(glLayer);
+        } catch (err) {}
       }
     };
   }, [map, styleUrl]);
