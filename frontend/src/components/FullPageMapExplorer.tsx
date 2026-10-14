@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, GeoJSON, useMap } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import maplibreGL from '@maplibre/maplibre-gl-leaflet';
 import { DistrictSummary, RankingItem, RecommendationItem, Language } from '../types';
-import indiaStatesSoi from '../assets/india_states_soi.json';
 import {
   MapPin,
   Zap,
@@ -40,6 +41,29 @@ function MapViewController({ center, zoom }: { center: [number, number]; zoom: n
   useEffect(() => {
     map.flyTo(center, zoom, { duration: 1.0 });
   }, [center, zoom, map]);
+  return null;
+}
+
+// OpenFreeMap Vector Layer component (Exact map from user reference!)
+function OpenFreeMapLayer({ styleUrl }: { styleUrl: string }) {
+  const map = useMap();
+
+  useEffect(() => {
+    // @ts-ignore
+    const glLayer = (maplibreGL as any)({
+      style: styleUrl
+    });
+    glLayer.addTo(map);
+
+    return () => {
+      try {
+        map.removeLayer(glLayer);
+      } catch (err) {
+        // safe unmount
+      }
+    };
+  }, [map, styleUrl]);
+
   return null;
 }
 
@@ -85,24 +109,14 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   const [mapCenter, setMapCenter] = useState<[number, number]>([22.5, 80.0]); // Centered on India
   const [mapZoom, setMapZoom] = useState<number>(5);
   const [showFlows, setShowFlows] = useState<boolean>(true);
-  const [showSoiBoundary, setShowSoiBoundary] = useState<boolean>(true);
-  const [tileLayer, setTileLayer] = useState<'esri' | 'osm' | 'hot'>('esri');
+  const [mapStyle, setMapStyle] = useState<'liberty' | 'bright' | 'positron'>('liberty');
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState<boolean>(false);
 
-  // 100% Free Tile Providers - ZERO API Key Required, ZERO Watermarks!
-  const tileConfigs = {
-    esri: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
-    },
-    osm: {
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    },
-    hot: {
-      url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-      attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team'
-    }
+  // Exact OpenFreeMap Vector Styles - 100% Free, NO API Key, NO Rate Limit!
+  const openFreeMapStyles = {
+    liberty: 'https://tiles.openfreemap.org/styles/liberty', // Shaded Relief Topography (matching user reference)
+    bright: 'https://tiles.openfreemap.org/styles/bright',
+    positron: 'https://tiles.openfreemap.org/styles/positron'
   };
 
   const handleDistrictClick = (d: DistrictSummary) => {
@@ -127,91 +141,23 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   const districtCoordsMap = new Map<number, [number, number]>();
   districts.forEach(d => districtCoordsMap.set(d.lgd, [d.lat, d.lng]));
 
-  // Official Survey of India (SOI) Style function
-  const pilotStates = ['Maharashtra', 'Uttar Pradesh', 'Tamil Nadu'];
-  const jnkLadakh = ['Jammu and Kashmir', 'Ladakh'];
-
-  const soiStyle = (feature: any) => {
-    const stateName = feature?.properties?.state_name;
-    const isPilot = pilotStates.includes(stateName);
-    const isKashmirOrLadakh = jnkLadakh.includes(stateName);
-
-    if (isPilot) {
-      return {
-        fillColor: '#0d9488',
-        fillOpacity: 0.12,
-        color: '#0f766e',
-        weight: 1.8,
-        opacity: 0.95
-      };
-    }
-
-    if (isKashmirOrLadakh) {
-      return {
-        fillColor: '#0369a1',
-        fillOpacity: 0.08,
-        color: '#0284c7',
-        weight: 1.6,
-        opacity: 0.95
-      };
-    }
-
-    return {
-      fillColor: '#0f766e',
-      fillOpacity: 0.03,
-      color: '#64748b',
-      weight: 1.0,
-      opacity: 0.7
-    };
-  };
-
-  const onEachState = (feature: any, layer: any) => {
-    const stateName = feature?.properties?.state_name;
-    const isPilot = pilotStates.includes(stateName);
-    const isKashmirOrLadakh = jnkLadakh.includes(stateName);
-
-    let label = stateName;
-    if (isPilot) label += ` (Pilot State · Active LMI)`;
-    if (isKashmirOrLadakh) label += ` (Official Union Territory of India · Full SoI Extent)`;
-
-    layer.bindTooltip(label, {
-      sticky: true,
-      className: 'text-xs font-semibold px-2 py-1 bg-white/95 text-slate-800 rounded shadow-md border border-slate-200'
-    });
-
-    layer.on({
-      mouseover: (e: any) => {
-        const l = e.target;
-        l.setStyle({
-          weight: 2.2,
-          color: '#0d9488',
-          fillOpacity: 0.2
-        });
-      },
-      mouseout: (e: any) => {
-        const l = e.target;
-        l.setStyle(soiStyle(feature));
-      }
-    });
-  };
-
   return (
     <div className="relative w-full h-[calc(100vh-140px)] min-h-[550px] sm:min-h-[640px] rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100 flex flex-col">
       
-      {/* 1. Official Survey of India (SOI) Government Compliance Banner */}
+      {/* 1. Official Top Information Banner */}
       <div className="w-full bg-slate-900 text-white px-3 sm:px-4 py-1.5 flex items-center justify-between text-[11px] z-10 flex-shrink-0">
         <div className="flex items-center space-x-2 truncate">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
           <span className="font-semibold text-emerald-300">
-            {lang === 'en' ? 'Survey of India (SoI) Official Territorial Boundaries' : 'भारतीय सर्वेक्षण विभाग (SoI) आधिकारिक संप्रभु सीमाएं'}
+            {lang === 'en' ? 'OpenFreeMap Geospatial Intelligence Engine' : 'ओपनफ्रीमैप भू-स्थानिक आसूचना प्रणाली'}
           </span>
           <span className="hidden sm:inline text-slate-400 font-mono">
-            · 36 States & UTs (Full Jammu & Kashmir, Ladakh & Arunachal Pradesh)
+            · OpenMapTiles Vector Topography (Full Kashmir, Ladakh & Himalayas)
           </span>
         </div>
         <div className="flex items-center space-x-2 text-[10px] text-slate-300 flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="font-mono">Govt. Verified</span>
+          <span className="font-mono">Live Telemetry</span>
         </div>
       </div>
 
@@ -227,22 +173,8 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
         >
           <MapViewController center={mapCenter} zoom={mapZoom} />
 
-          {/* Clean Vector/Raster Basemap */}
-          <TileLayer
-            url={tileConfigs[tileLayer].url}
-            attribution={tileConfigs[tileLayer].attribution}
-            maxZoom={18}
-          />
-
-          {/* Official Survey of India 36 States and Sovereign Territory GeoJSON Layer */}
-          {showSoiBoundary && (
-            <GeoJSON
-              key={`soi-${tileLayer}`}
-              data={indiaStatesSoi as any}
-              style={soiStyle}
-              onEachFeature={onEachState}
-            />
-          )}
+          {/* Exact OpenFreeMap Vector Layer (User Reference) */}
+          <OpenFreeMapLayer key={mapStyle} styleUrl={openFreeMapStyles[mapStyle]} />
 
           {/* Reallocation Min-Cost Flow Lines between districts */}
           {showFlows && recommendations.map((rec) => {
@@ -329,7 +261,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
           ))}
         </MapContainer>
 
-        {/* 3. Floating Desktop Left Intelligence Panel (Electricity Maps Reference) */}
+        {/* 3. Floating Desktop Left Intelligence Panel */}
         <div className={`hidden sm:block absolute top-4 left-4 z-20 w-80 lg:w-96 max-h-[calc(100%-32px)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xl p-5 transition-all duration-300 ${
           selectedDistrict ? 'ring-2 ring-teal-500' : ''
         }`}>
@@ -517,13 +449,13 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
 
               <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-2 border-t border-slate-100">
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
-                <span>Survey of India Boundaries overlaid on Esri Light Canvas (100% Free · No API Key).</span>
+                <span>OpenFreeMap Liberty Vector Engine (100% Free · No API Key).</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* 4. Floating Right Controls: Basemap Selector & Reset */}
+        {/* 4. Floating Right Controls: Style Switcher & Reset */}
         <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex flex-col space-y-2">
           {/* Reset View Button */}
           <button
@@ -533,20 +465,6 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
           >
             <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />
             <span className="hidden sm:inline">India View</span>
-          </button>
-
-          {/* Toggle Boundary Overlay */}
-          <button
-            onClick={() => setShowSoiBoundary(prev => !prev)}
-            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 backdrop-blur-md rounded-xl border shadow-md transition-all text-xs font-semibold flex items-center space-x-1.5 ${
-              showSoiBoundary
-                ? 'bg-teal-700 text-white border-teal-700'
-                : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-            title="Toggle Survey of India Boundaries"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">SoI Border</span>
           </button>
 
           {/* Toggle Reallocation Flow Lines */}
@@ -563,30 +481,30 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
             <span className="hidden sm:inline">Flow Lines</span>
           </button>
 
-          {/* 100% Free Basemap Tile Switcher (Zero API Key, No Watermark) */}
+          {/* OpenFreeMap Style Switcher */}
           <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-md p-1 flex flex-col space-y-1 text-[10px] font-bold">
             <button
-              onClick={() => setTileLayer('esri')}
-              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'esri' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              onClick={() => setMapStyle('liberty')}
+              className={`px-2 py-1 rounded transition-colors text-left ${mapStyle === 'liberty' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
-              Clean Gray
+              Liberty Relief
             </button>
             <button
-              onClick={() => setTileLayer('osm')}
-              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'osm' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              onClick={() => setMapStyle('bright')}
+              className={`px-2 py-1 rounded transition-colors text-left ${mapStyle === 'bright' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
-              OpenStreetMap
+              Bright Clean
             </button>
             <button
-              onClick={() => setTileLayer('hot')}
-              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'hot' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              onClick={() => setMapStyle('positron')}
+              className={`px-2 py-1 rounded transition-colors text-left ${mapStyle === 'positron' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
-              Humanitarian
+              Positron Gray
             </button>
           </div>
         </div>
 
-        {/* 5. Mobile Bottom Drawer / Sheet Trigger (Shows on < sm screens!) */}
+        {/* 5. Mobile Bottom Drawer / Sheet Trigger */}
         <div className="sm:hidden absolute bottom-3 inset-x-3 z-20">
           <button
             onClick={() => setIsMobilePanelOpen(prev => !prev)}

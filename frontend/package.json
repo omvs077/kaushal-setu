@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "@types/leaflet": "^1.9.22",
     "autoprefixer": "^10.6.1",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.56.0",
+    "maplibre-gl": "^6.14.0",
     "postcss": "^8.5.30",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
