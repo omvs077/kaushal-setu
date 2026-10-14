@@ -1,0 +1,117 @@
+import React, { useState } from 'react';
+import { AlertItem, Language } from '../types';
+import { Bell, Check, ShieldAlert, ArrowUpRight, Clock } from 'lucide-react';
+
+interface AlertsCenterProps {
+  alerts: AlertItem[];
+  lang: Language;
+  t: (key: string) => string;
+}
+
+export const AlertsCenter: React.FC<AlertsCenterProps> = ({ alerts, lang, t }) => {
+  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({});
+
+  const toggleAcknowledge = (id: string) => {
+    setAcknowledged((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const activeAlerts = alerts.filter(a => !acknowledged[a.id]);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      
+      {/* Header */}
+      <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center space-x-2">
+          <div className="p-1.5 rounded-lg bg-red-100 text-red-700">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-bold text-slate-900">
+                {t('alerts')}
+              </h2>
+              <span className="text-xs bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded-full">
+                {activeAlerts.length} {lang === 'en' ? 'Active' : 'सक्रिय'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {lang === 'en'
+                ? 'High-confidence early warnings raised when leading telemetry outpaces local capacity for 2+ consecutive runs.'
+                : 'लगातार 2+ चरणों तक स्थानीय क्षमता से अधिक मांग रहने पर जारी उच्च-विश्वसनीयता पूर्व चेतावनियां।'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts List */}
+      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+        {alerts.slice(0, 10).map((alert) => {
+          const isAck = acknowledged[alert.id];
+
+          return (
+            <div
+              key={alert.id}
+              className={`p-4 transition-all ${isAck ? 'bg-slate-50 opacity-60' : 'hover:bg-slate-50/80'}`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                
+                {/* Left Info */}
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+                      style={{ backgroundColor: `${alert.severity_color}20`, color: alert.severity_color }}
+                    >
+                      {lang === 'hi' ? alert.severity_label_hi : alert.severity_label}
+                    </span>
+
+                    <span className="text-xs font-bold text-slate-900">
+                      {lang === 'hi' ? alert.district_name_hi : alert.district_name} · {lang === 'hi' ? alert.trade_name_hi : alert.trade_name}
+                    </span>
+
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {alert.id} · {alert.consecutive_runs} {lang === 'en' ? 'runs persistent' : 'चरणों से निरंतर'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    {lang === 'hi' ? alert.trigger_reason_hi : alert.trigger_reason_en}
+                  </p>
+
+                  <div className="flex items-center space-x-3 text-[11px] text-slate-400">
+                    <span className="flex items-center space-x-1">
+                      <Clock className="w-3 h-3" />
+                      <span>{alert.timestamp.replace('T', ' ').replace('Z', ' UTC')}</span>
+                    </span>
+                    <span>·</span>
+                    <span className="font-semibold text-red-600">
+                      {alert.net_gap > 0 ? `+${alert.net_gap} gap` : `${alert.net_gap} gap`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right Action */}
+                <div className="self-end sm:self-center flex-shrink-0">
+                  <button
+                    onClick={() => toggleAcknowledge(alert.id)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                      isAck
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{isAck ? (lang === 'en' ? 'Acknowledged' : 'स्वीकृत') : (lang === 'en' ? 'Acknowledge' : 'स्वीकार करें')}</span>
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+    </div>
+  );
+};
