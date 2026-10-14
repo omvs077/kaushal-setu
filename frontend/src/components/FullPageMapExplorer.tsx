@@ -86,22 +86,22 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   const [mapZoom, setMapZoom] = useState<number>(5);
   const [showFlows, setShowFlows] = useState<boolean>(true);
   const [showSoiBoundary, setShowSoiBoundary] = useState<boolean>(true);
-  const [tileLayer, setTileLayer] = useState<'carto' | 'osm' | 'esri'>('carto');
+  const [tileLayer, setTileLayer] = useState<'esri' | 'osm' | 'hot'>('esri');
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState<boolean>(false);
 
-  // 100% Free Tile Providers - Carto Light Positron is ultra clean with zero disputed line clashes!
+  // 100% Free Tile Providers - ZERO API Key Required, ZERO Watermarks!
   const tileConfigs = {
-    carto: {
-      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap'
+    esri: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
     },
     osm: {
       url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     },
-    esri: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+    hot: {
+      url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team'
     }
   };
 
@@ -517,7 +517,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
 
               <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-2 border-t border-slate-100">
                 <ShieldCheck className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
-                <span>Survey of India Boundaries overlaid on Carto Light Canvas.</span>
+                <span>Survey of India Boundaries overlaid on Esri Light Canvas (100% Free · No API Key).</span>
               </div>
             </div>
           )}
@@ -563,25 +563,25 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
             <span className="hidden sm:inline">Flow Lines</span>
           </button>
 
-          {/* Free Basemap Tile Switcher */}
+          {/* 100% Free Basemap Tile Switcher (Zero API Key, No Watermark) */}
           <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-md p-1 flex flex-col space-y-1 text-[10px] font-bold">
-            <button
-              onClick={() => setTileLayer('carto')}
-              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'carto' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-            >
-              Clean Positron
-            </button>
             <button
               onClick={() => setTileLayer('esri')}
               className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'esri' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
-              Esri Gray
+              Clean Gray
             </button>
             <button
               onClick={() => setTileLayer('osm')}
               className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'osm' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
               OpenStreetMap
+            </button>
+            <button
+              onClick={() => setTileLayer('hot')}
+              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'hot' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Humanitarian
             </button>
           </div>
         </div>

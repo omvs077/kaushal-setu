@@ -1,5 +1,5 @@
-import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
+import React, { useState } from 'react';
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { OverviewData, Language } from '../types';
 import { Zap, Truck, CreditCard, Briefcase, Sparkles, AlertCircle, ArrowUpRight } from 'lucide-react';
 
@@ -16,6 +16,8 @@ export const KapellaCharts: React.FC<KapellaChartsProps> = ({
   onOpenReallocationTab,
   t
 }) => {
+  const [hoveredSlice, setHoveredSlice] = useState<{ name: string; value: number; color: string } | null>(null);
+
   if (!overview) return null;
 
   // Donut chart data from severity distribution
@@ -104,30 +106,43 @@ export const KapellaCharts: React.FC<KapellaChartsProps> = ({
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={42}
-                  outerRadius={64}
+                  innerRadius={44}
+                  outerRadius={65}
                   paddingAngle={3}
                   dataKey="value"
+                  onMouseEnter={(_, index) => setHoveredSlice(pieData[index])}
+                  onMouseLeave={() => setHoveredSlice(null)}
                 >
                   {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.color}
+                      className="cursor-pointer transition-opacity hover:opacity-85"
+                    />
                   ))}
                 </Pie>
-                <Tooltip
-                  formatter={(val: any) => [`${val} trades`, 'Count']}
-                  contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }}
-                />
               </PieChart>
             </ResponsiveContainer>
             
-            {/* Center Donut Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-lg font-extrabold text-slate-900 leading-none">
-                {overview.kpis.monitored_trades * overview.kpis.monitored_districts}
+            {/* Center Donut Label: Dynamically displays hovered slice or total pairs with zero tooltip overlap! */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-1">
+              <span
+                className="text-lg font-black leading-none transition-colors duration-150"
+                style={{ color: hoveredSlice ? hoveredSlice.color : '#0f172a' }}
+              >
+                {hoveredSlice ? hoveredSlice.value : (overview.kpis.monitored_trades * overview.kpis.monitored_districts)}
               </span>
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mt-0.5">
-                {lang === 'en' ? 'Pairs' : 'जोड़े'}
+              <span
+                className="text-[9px] uppercase tracking-wider font-bold mt-0.5 transition-colors duration-150 truncate max-w-[80px]"
+                style={{ color: hoveredSlice ? hoveredSlice.color : '#94a3b8' }}
+              >
+                {hoveredSlice ? (lang === 'en' ? 'Trades' : 'ट्रेड') : (lang === 'en' ? 'Pairs' : 'जोड़े')}
               </span>
+              {hoveredSlice && (
+                <span className="text-[8px] font-semibold text-slate-500 truncate max-w-[75px] leading-tight">
+                  {hoveredSlice.name}
+                </span>
+              )}
             </div>
           </div>
 
