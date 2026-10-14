@@ -3,6 +3,19 @@ Kaushal Setu (कौशल सेतु) - Labour Market Intelligence & Skill Fo
 FastAPI Application Entrypoint
 """
 
+import sys
+import types
+from pathlib import Path
+
+# Ensure 'backend' namespace resolves even when working directory is 'backend/' (e.g. on Render)
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+if "backend" not in sys.modules:
+    _backend_pkg = types.ModuleType("backend")
+    _backend_pkg.__path__ = [str(_BACKEND_DIR)]
+    sys.modules["backend"] = _backend_pkg
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
