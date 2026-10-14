@@ -3,16 +3,30 @@ import { MapContainer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import * as maplibregl from 'maplibre-gl';
 import { setWorkerUrl } from 'maplibre-gl';
 // @ts-ignore
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import maplibreGL from '@maplibre/maplibre-gl-leaflet';
+import * as bharatmap from 'bharatmap';
 
-// Explicitly register MapLibre Web Worker for Vite so vector tiles decode properly
+// 1. Explicitly register MapLibre Web Worker for Vite so vector tiles decode properly
 try {
   setWorkerUrl(workerUrl);
 } catch (err) {
   console.warn('MapLibre worker registration:', err);
+}
+
+// 2. Install bharatmap protocol on MapLibre to ensure Survey of India boundaries
+try {
+  const fakeMl = {
+    addProtocol: (scheme: string, handler: any) => {
+      (maplibregl as any).addProtocol(scheme, handler);
+    }
+  };
+  (bharatmap as any).install(fakeMl);
+} catch (err) {
+  console.warn('bharatmap install:', err);
 }
 
 import { DistrictSummary, RankingItem, RecommendationItem, Language } from '../types';
@@ -55,7 +69,7 @@ function MapViewController({ center, zoom }: { center: [number, number]; zoom: n
   return null;
 }
 
-// OpenFreeMap Vector Layer component (Exact map from user reference with enhanced, crisp boundaries!)
+// OpenFreeMap Vector Layer component with BharatMap Survey of India boundary enforcement!
 function OpenFreeMapLayer({ styleUrl }: { styleUrl: string }) {
   const map = useMap();
 
@@ -65,26 +79,25 @@ function OpenFreeMapLayer({ styleUrl }: { styleUrl: string }) {
 
     async function initLayer() {
       try {
-        const res = await fetch(styleUrl);
-        const style = await res.json();
+        // Fix style using bharatmap which enforces Survey of India boundaries and cuts disputed borders
+        const fixedStyle = await (bharatmap as any).fixStyle(styleUrl);
         
-        // Ensure state and national boundaries are sharply delineated at all zoom levels
-        if (style.layers && Array.isArray(style.layers)) {
-          for (const layer of style.layers) {
-            if (layer.id === 'boundary_3') {
-              // State / Provincial boundaries
-              layer.minzoom = 2;
+        // Remove disputed borders (LoC & LAC) and polish state boundaries
+        if (fixedStyle.layers && Array.isArray(fixedStyle.layers)) {
+          for (const layer of fixedStyle.layers) {
+            if (layer.id === 'boundary_disputed') {
+              // Hide LoC and LAC completely!
+              layer.layout = { ...layer.layout, visibility: 'none' };
+            } else if (layer.id === 'boundary_3') {
+              // Undisputed internal state boundaries
+              layer.minzoom = 3;
               if (!layer.paint) layer.paint = {};
-              layer.paint['line-color'] = '#475569'; // Slate-600 clear boundary
-              layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 2, 0.9, 6, 1.4, 11, 2.4];
-            } else if (layer.id === 'boundary_2') {
-              // International / Sovereign boundary
+              layer.paint['line-color'] = '#64748b';
+              layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 3, 0.8, 6, 1.2, 11, 2.0];
+            } else if (layer.id === 'boundary_2-india' || layer.id === 'boundary_2') {
+              // Official sovereign boundary of India (SOI compliant)
               if (!layer.paint) layer.paint = {};
-              layer.paint['line-color'] = '#1e293b'; // Slate-800 dark border
-              layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 2, 1.4, 5, 2.2, 11, 3.8];
-            } else if (layer.id === 'boundary_disputed') {
-              if (!layer.paint) layer.paint = {};
-              layer.paint['line-color'] = '#334155';
+              layer.paint['line-color'] = '#1e293b';
               layer.paint['line-width'] = ['interpolate', ['linear'], ['zoom'], 2, 1.4, 5, 2.2, 11, 3.8];
             }
           }
@@ -94,11 +107,11 @@ function OpenFreeMapLayer({ styleUrl }: { styleUrl: string }) {
 
         // @ts-ignore
         glLayer = (maplibreGL as any)({
-          style: style
+          style: fixedStyle
         });
         glLayer.addTo(map);
       } catch (e) {
-        // Fallback to direct style URL if fetch fails
+        console.warn('BharatMap style fallback:', e);
         if (!isMounted) return;
         // @ts-ignore
         glLayer = (maplibreGL as any)({
@@ -226,6 +239,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
           maxZoom={18}
           className="w-full h-full z-0"
           zoomControl={false}
+          attributionControl={false}
         >
           <MapViewController center={mapCenter} zoom={mapZoom} />
 

@@ -43,3 +43,8 @@ body {
   height: 100%;
   border-radius: 1rem;
 }
+
+/* Remove Leaflet default attribution and war-related flag watermarks */
+.leaflet-control-attribution {
+  display: none !important;
+}
