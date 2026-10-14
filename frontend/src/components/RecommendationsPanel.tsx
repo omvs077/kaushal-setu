@@ -103,10 +103,10 @@ export const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
                 </div>
 
                 {/* Right: Metrics & Action */}
-                <div className="flex items-center space-x-4 self-end lg:self-center">
+                <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end space-x-3 sm:space-x-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                   
                   {/* Seats & Distance */}
-                  <div className="text-right text-xs">
+                  <div className="text-left sm:text-right text-xs">
                     <div className="font-bold text-slate-900 text-sm">
                       +{rec.seats_to_shift} <span className="text-xs font-normal text-slate-500">{lang === 'en' ? 'seats' : 'सीटें'}</span>
                     </div>

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { DistrictSummary, RankingItem, RecommendationItem, Language } from '../types';
+import indiaStatesSoi from '../assets/india_states_soi.json';
 import {
   MapPin,
   Zap,
@@ -17,7 +18,10 @@ import {
   Compass,
   AlertTriangle,
   Info,
-  Maximize2
+  Maximize2,
+  ShieldCheck,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 interface FullPageMapExplorerProps {
@@ -78,13 +82,19 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   t
 }) => {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictSummary | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([22.0, 79.0]); // Centered on India
+  const [mapCenter, setMapCenter] = useState<[number, number]>([22.5, 80.0]); // Centered on India
   const [mapZoom, setMapZoom] = useState<number>(5);
   const [showFlows, setShowFlows] = useState<boolean>(true);
-  const [tileLayer, setTileLayer] = useState<'osm' | 'esri' | 'hot'>('osm');
+  const [showSoiBoundary, setShowSoiBoundary] = useState<boolean>(true);
+  const [tileLayer, setTileLayer] = useState<'carto' | 'osm' | 'esri'>('carto');
+  const [isMobilePanelOpen, setIsMobilePanelOpen] = useState<boolean>(false);
 
-  // 100% Free Tile Providers - ZERO API Key Required, No Watermark!
+  // 100% Free Tile Providers - Carto Light Positron is ultra clean with zero disputed line clashes!
   const tileConfigs = {
+    carto: {
+      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap'
+    },
     osm: {
       url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -92,10 +102,6 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
     esri: {
       url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
-    },
-    hot: {
-      url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-      attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team'
     }
   };
 
@@ -103,11 +109,12 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
     setSelectedDistrict(d);
     setMapCenter([d.lat, d.lng]);
     setMapZoom(7);
+    setIsMobilePanelOpen(true);
   };
 
   const resetView = () => {
     setSelectedDistrict(null);
-    setMapCenter([22.0, 79.0]);
+    setMapCenter([22.5, 80.0]);
     setMapZoom(5);
   };
 
@@ -120,353 +127,548 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   const districtCoordsMap = new Map<number, [number, number]>();
   districts.forEach(d => districtCoordsMap.set(d.lgd, [d.lat, d.lng]));
 
+  // Official Survey of India (SOI) Style function
+  const pilotStates = ['Maharashtra', 'Uttar Pradesh', 'Tamil Nadu'];
+  const jnkLadakh = ['Jammu and Kashmir', 'Ladakh'];
+
+  const soiStyle = (feature: any) => {
+    const stateName = feature?.properties?.state_name;
+    const isPilot = pilotStates.includes(stateName);
+    const isKashmirOrLadakh = jnkLadakh.includes(stateName);
+
+    if (isPilot) {
+      return {
+        fillColor: '#0d9488',
+        fillOpacity: 0.12,
+        color: '#0f766e',
+        weight: 1.8,
+        opacity: 0.95
+      };
+    }
+
+    if (isKashmirOrLadakh) {
+      return {
+        fillColor: '#0369a1',
+        fillOpacity: 0.08,
+        color: '#0284c7',
+        weight: 1.6,
+        opacity: 0.95
+      };
+    }
+
+    return {
+      fillColor: '#0f766e',
+      fillOpacity: 0.03,
+      color: '#64748b',
+      weight: 1.0,
+      opacity: 0.7
+    };
+  };
+
+  const onEachState = (feature: any, layer: any) => {
+    const stateName = feature?.properties?.state_name;
+    const isPilot = pilotStates.includes(stateName);
+    const isKashmirOrLadakh = jnkLadakh.includes(stateName);
+
+    let label = stateName;
+    if (isPilot) label += ` (Pilot State · Active LMI)`;
+    if (isKashmirOrLadakh) label += ` (Official Union Territory of India · Full SoI Extent)`;
+
+    layer.bindTooltip(label, {
+      sticky: true,
+      className: 'text-xs font-semibold px-2 py-1 bg-white/95 text-slate-800 rounded shadow-md border border-slate-200'
+    });
+
+    layer.on({
+      mouseover: (e: any) => {
+        const l = e.target;
+        l.setStyle({
+          weight: 2.2,
+          color: '#0d9488',
+          fillOpacity: 0.2
+        });
+      },
+      mouseout: (e: any) => {
+        const l = e.target;
+        l.setStyle(soiStyle(feature));
+      }
+    });
+  };
+
   return (
-    <div className="relative w-full h-[calc(100vh-140px)] min-h-[620px] rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100">
+    <div className="relative w-full h-[calc(100vh-140px)] min-h-[550px] sm:min-h-[640px] rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100 flex flex-col">
       
-      {/* 1. Leaflet Map with 100% Free OpenStreetMap Tiles */}
-      <MapContainer
-        center={mapCenter}
-        zoom={mapZoom}
-        minZoom={4}
-        maxZoom={18}
-        className="w-full h-full z-0"
-        zoomControl={false}
-      >
-        <MapViewController center={mapCenter} zoom={mapZoom} />
+      {/* 1. Official Survey of India (SOI) Government Compliance Banner */}
+      <div className="w-full bg-slate-900 text-white px-3 sm:px-4 py-1.5 flex items-center justify-between text-[11px] z-10 flex-shrink-0">
+        <div className="flex items-center space-x-2 truncate">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <span className="font-semibold text-emerald-300">
+            {lang === 'en' ? 'Survey of India (SoI) Official Territorial Boundaries' : 'भारतीय सर्वेक्षण विभाग (SoI) आधिकारिक संप्रभु सीमाएं'}
+          </span>
+          <span className="hidden sm:inline text-slate-400 font-mono">
+            · 36 States & UTs (Full Jammu & Kashmir, Ladakh & Arunachal Pradesh)
+          </span>
+        </div>
+        <div className="flex items-center space-x-2 text-[10px] text-slate-300 flex-shrink-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="font-mono">Govt. Verified</span>
+        </div>
+      </div>
 
-        {/* Free TileLayer with zero API key */}
-        <TileLayer
-          url={tileConfigs[tileLayer].url}
-          attribution={tileConfigs[tileLayer].attribution}
+      {/* 2. Leaflet Map Container */}
+      <div className="relative w-full flex-1 min-h-0">
+        <MapContainer
+          center={mapCenter}
+          zoom={mapZoom}
+          minZoom={4}
           maxZoom={18}
-        />
+          className="w-full h-full z-0"
+          zoomControl={false}
+        >
+          <MapViewController center={mapCenter} zoom={mapZoom} />
 
-        {/* Reallocation Min-Cost Flow Lines between districts */}
-        {showFlows && recommendations.map((rec) => {
-          const p1 = districtCoordsMap.get(rec.source_district_lgd);
-          const p2 = districtCoordsMap.get(rec.target_district_lgd);
-          if (!p1 || !p2) return null;
+          {/* Clean Vector/Raster Basemap */}
+          <TileLayer
+            url={tileConfigs[tileLayer].url}
+            attribution={tileConfigs[tileLayer].attribution}
+            maxZoom={18}
+          />
 
-          return (
-            <Polyline
-              key={rec.id}
-              positions={[p1, p2]}
-              pathOptions={{
-                color: '#7c3aed',
-                weight: 2.5,
-                dashArray: '5, 8',
-                opacity: 0.85
+          {/* Official Survey of India 36 States and Sovereign Territory GeoJSON Layer */}
+          {showSoiBoundary && (
+            <GeoJSON
+              key={`soi-${tileLayer}`}
+              data={indiaStatesSoi as any}
+              style={soiStyle}
+              onEachFeature={onEachState}
+            />
+          )}
+
+          {/* Reallocation Min-Cost Flow Lines between districts */}
+          {showFlows && recommendations.map((rec) => {
+            const p1 = districtCoordsMap.get(rec.source_district_lgd);
+            const p2 = districtCoordsMap.get(rec.target_district_lgd);
+            if (!p1 || !p2) return null;
+
+            return (
+              <Polyline
+                key={rec.id}
+                positions={[p1, p2]}
+                pathOptions={{
+                  color: '#7c3aed',
+                  weight: 2.5,
+                  dashArray: '5, 8',
+                  opacity: 0.85
+                }}
+              >
+                <Popup>
+                  <div className="p-2 text-xs">
+                    <div className="font-bold text-slate-900">
+                      {rec.source_district_name} → {rec.target_district_name}
+                    </div>
+                    <div className="text-[11px] text-purple-700 font-semibold mt-1">
+                      Reallocating {rec.seats_to_shift} Seats ({rec.target_trade_name})
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Transit: {rec.distance_km} km · Capex Saved: ₹{rec.estimated_capex_savings_lakhs} Lakhs
+                    </div>
+                  </div>
+                </Popup>
+              </Polyline>
+            );
+          })}
+
+          {/* Clean District Markers */}
+          {districts.map((d) => (
+            <Marker
+              key={d.lgd}
+              position={[d.lat, d.lng]}
+              icon={createDistrictIcon(d, selectedDistrict?.lgd === d.lgd)}
+              eventHandlers={{
+                click: () => handleDistrictClick(d)
               }}
             >
               <Popup>
-                <div className="p-2 text-xs">
-                  <div className="font-bold text-slate-900">
-                    {rec.source_district_name} → {rec.target_district_name}
+                <div className="p-2 text-xs min-w-[210px]">
+                  <div className="flex justify-between items-start font-bold text-slate-900">
+                    <span className="text-sm">{lang === 'hi' ? d.name_hi : d.name}</span>
+                    <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.2 rounded">
+                      {d.state_code}
+                    </span>
                   </div>
-                  <div className="text-[11px] text-purple-700 font-semibold mt-1">
-                    Reallocating {rec.seats_to_shift} Seats ({rec.target_trade_name})
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{d.profile}</p>
+                  
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Net Labour Gap:</span>
+                      <strong className={d.aggregate_gap > 0 ? 'text-red-600' : 'text-emerald-600'}>
+                        {d.aggregate_gap > 0 ? `+${d.aggregate_gap} Deficit` : `${d.aggregate_gap} Balanced`}
+                      </strong>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Power Surge:</span>
+                      <strong className="text-amber-600 font-mono">+{d.signals.power_growth_pct}%</strong>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Freight E-Way:</span>
+                      <strong className="text-blue-600 font-mono">+{d.signals.eway_bills_growth_pct}%</strong>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    Transit: {rec.distance_km} km · Capex Saved: ₹{rec.estimated_capex_savings_lakhs} Lakhs
-                  </div>
+
+                  <button
+                    onClick={() => handleDistrictClick(d)}
+                    className="w-full mt-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs transition-colors shadow-2xs"
+                  >
+                    {lang === 'en' ? 'Open Zone Intelligence Panel' : 'ज़ोन आसूचना पैनल खोलें'}
+                  </button>
                 </div>
               </Popup>
-            </Polyline>
-          );
-        })}
+            </Marker>
+          ))}
+        </MapContainer>
 
-        {/* Clean District Markers */}
-        {districts.map((d) => (
-          <Marker
-            key={d.lgd}
-            position={[d.lat, d.lng]}
-            icon={createDistrictIcon(d, selectedDistrict?.lgd === d.lgd)}
-            eventHandlers={{
-              click: () => handleDistrictClick(d)
-            }}
-          >
-            <Popup>
-              <div className="p-2 text-xs min-w-[210px]">
-                <div className="flex justify-between items-start font-bold text-slate-900">
-                  <span className="text-sm">{lang === 'hi' ? d.name_hi : d.name}</span>
-                  <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.2 rounded">
-                    {d.state_code}
+        {/* 3. Floating Desktop Left Intelligence Panel (Electricity Maps Reference) */}
+        <div className={`hidden sm:block absolute top-4 left-4 z-20 w-80 lg:w-96 max-h-[calc(100%-32px)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xl p-5 transition-all duration-300 ${
+          selectedDistrict ? 'ring-2 ring-teal-500' : ''
+        }`}>
+          {selectedDistrict ? (
+            /* District Specific Zone Panel */
+            <div className="space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {lang === 'en' ? 'District Zone Active' : 'सक्रिय ज़िला क्षेत्र'}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-extrabold text-slate-900 mt-0.5">
+                    {lang === 'hi' ? selectedDistrict.name_hi : selectedDistrict.name}
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    {selectedDistrict.state_code} · LGD {selectedDistrict.lgd}
                   </span>
-                </div>
-                <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{d.profile}</p>
-                
-                <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Net Labour Gap:</span>
-                    <strong className={d.aggregate_gap > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                      {d.aggregate_gap > 0 ? `+${d.aggregate_gap} Deficit` : `${d.aggregate_gap} Balanced`}
-                    </strong>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Power Surge:</span>
-                    <strong className="text-amber-600 font-mono">+{d.signals.power_growth_pct}%</strong>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Freight E-Way:</span>
-                    <strong className="text-blue-600 font-mono">+{d.signals.eway_bills_growth_pct}%</strong>
-                  </div>
                 </div>
 
                 <button
-                  onClick={() => handleDistrictClick(d)}
-                  className="w-full mt-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs transition-colors shadow-2xs"
+                  onClick={resetView}
+                  className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Return to National View"
                 >
-                  {lang === 'en' ? 'Open Zone Intelligence Panel' : 'ज़ोन आसूचना पैनल खोलें'}
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
 
-      {/* 2. Floating Left Intelligence Panel (Electricity Maps Reference) */}
-      <div className={`absolute top-4 left-4 z-20 w-80 sm:w-96 max-h-[calc(100%-32px)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xl p-5 transition-all duration-300 ${
-        selectedDistrict ? 'ring-2 ring-teal-500' : ''
-      }`}>
-        {selectedDistrict ? (
-          /* District Specific Zone Panel */
-          <div className="space-y-4">
-            <div className="flex items-start justify-between">
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                {selectedDistrict.profile}
+              </p>
+
+              {/* Leading Signals Status Grid */}
               <div>
-                <div className="flex items-center space-x-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {lang === 'en' ? 'District Zone Active' : 'सक्रिय ज़िला क्षेत्र'}
-                  </span>
+                <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  {lang === 'en' ? 'Leading Economic Telemetry' : 'अग्रणी आर्थिक टेलीमेट्री'}
                 </div>
-                <h3 className="text-lg font-extrabold text-slate-900 mt-0.5">
-                  {lang === 'hi' ? selectedDistrict.name_hi : selectedDistrict.name}
-                </h3>
-                <span className="text-xs text-slate-500">
-                  {selectedDistrict.state_code} · LGD {selectedDistrict.lgd}
-                </span>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-amber-50/70 p-2.5 rounded-xl border border-amber-100">
+                    <span className="text-[10px] text-amber-700 font-semibold flex items-center space-x-1">
+                      <Zap className="w-3 h-3 text-amber-500" />
+                      <span>Power Load</span>
+                    </span>
+                    <div className="text-sm font-extrabold text-amber-900 mt-0.5">
+                      +{selectedDistrict.signals.power_growth_pct}%
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
+                    <span className="text-[10px] text-blue-700 font-semibold flex items-center space-x-1">
+                      <Truck className="w-3 h-3 text-blue-500" />
+                      <span>Freight E-Way</span>
+                    </span>
+                    <div className="text-sm font-extrabold text-blue-900 mt-0.5">
+                      +{selectedDistrict.signals.eway_bills_growth_pct}%
+                    </div>
+                  </div>
+
+                  <div className="bg-purple-50/70 p-2.5 rounded-xl border border-purple-100">
+                    <span className="text-[10px] text-purple-700 font-semibold flex items-center space-x-1">
+                      <CreditCard className="w-3 h-3 text-purple-500" />
+                      <span>MSME Credit</span>
+                    </span>
+                    <div className="text-sm font-extrabold text-purple-900 mt-0.5">
+                      +{selectedDistrict.signals.msme_credit_growth_pct}%
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-emerald-700 font-semibold flex items-center space-x-1">
+                      <Briefcase className="w-3 h-3 text-emerald-500" />
+                      <span>Job Postings</span>
+                    </span>
+                    <div className="text-sm font-extrabold text-emerald-900 mt-0.5">
+                      {selectedDistrict.signals.online_postings_index} Idx
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* District Trade Deficit Breakdown */}
+              <div>
+                <div className="flex justify-between items-center text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  <span>{lang === 'en' ? 'Critical Trades in Hub' : 'प्रमुख ट्रेड स्थिति'}</span>
+                  <span className="text-slate-400 font-normal">Demand vs Supply</span>
+                </div>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {districtRankings.map((tr) => (
+                    <div key={tr.trade_id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                      <div className="flex justify-between font-bold text-slate-800">
+                        <span className="truncate max-w-[190px]">
+                          {lang === 'hi' ? tr.trade_name_hi : tr.trade_name}
+                        </span>
+                        <span className={tr.net_gap > 0 ? 'text-red-600' : 'text-emerald-600'}>
+                          {tr.net_gap > 0 ? `+${tr.net_gap}` : tr.net_gap}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                        <span>Demand: {tr.demand_p50}</span>
+                        <span>Supply: {tr.effective_supply}</span>
+                        <span className="font-semibold" style={{ color: tr.severity_color }}>
+                          {tr.severity_label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2 mt-2 pt-1 border-t border-slate-200/60">
+                        <button
+                          onClick={() => onSelectWhy(tr)}
+                          className="text-[10px] font-bold text-teal-700 hover:underline flex items-center space-x-0.5"
+                        >
+                          <HelpCircle className="w-3 h-3" />
+                          <span>Why?</span>
+                        </button>
+                        <span>·</span>
+                        <button
+                          onClick={() => onSelectSimulate(tr)}
+                          className="text-[10px] font-bold text-blue-700 hover:underline flex items-center space-x-0.5"
+                        >
+                          <Sliders className="w-3 h-3" />
+                          <span>Simulate</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <button
                 onClick={resetView}
-                className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Return to National View"
+                className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all"
               >
-                <X className="w-4 h-4" />
+                {lang === 'en' ? '← Back to National View' : '← राष्ट्रीय विहंगावलोकन पर वापस जाएं'}
               </button>
             </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              {selectedDistrict.profile}
-            </p>
-
-            {/* Leading Signals Status Grid */}
-            <div>
-              <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                {lang === 'en' ? 'Leading Economic Telemetry' : 'अग्रणी आर्थिक टेलीमेट्री'}
+          ) : (
+            /* National View Panel */
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    {lang === 'en' ? 'Live Geospatial Intelligence' : 'सजीव स्थानिक आसूचना'}
+                  </span>
+                </div>
+                <h3 className="text-base font-extrabold text-slate-900 mt-1">
+                  {lang === 'en' ? 'National Skilling Corridors' : 'राष्ट्रीय कौशल गलियारा'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  {lang === 'en'
+                    ? 'Click any district node across India to inspect local industrial electricity surge, freight e-way bills, and trade deficits.'
+                    : 'स्थानीय औद्योगिक बिजली वृद्धि, ई-वे बिल और ट्रेड घाटे का निरीक्षण करने हेतु किसी भी ज़िला नोड पर क्लिक करें।'}
+                </p>
               </div>
 
+              {/* Quick Metrics */}
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-amber-50/70 p-2.5 rounded-xl border border-amber-100">
-                  <span className="text-[10px] text-amber-700 font-semibold flex items-center space-x-1">
-                    <Zap className="w-3 h-3 text-amber-500" />
-                    <span>Power Load</span>
-                  </span>
-                  <div className="text-sm font-extrabold text-amber-900 mt-0.5">
-                    +{selectedDistrict.signals.power_growth_pct}%
-                  </div>
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <span className="text-[10px] text-slate-400 font-semibold block">Monitored Hubs</span>
+                  <span className="text-base font-extrabold text-slate-800">12 Districts</span>
                 </div>
+                <div className="bg-red-50/80 p-2.5 rounded-xl border border-red-100">
+                  <span className="text-[10px] text-red-600 font-semibold block">Critical Deficits</span>
+                  <span className="text-base font-extrabold text-red-700">3 Mega-Clusters</span>
+                </div>
+              </div>
 
-                <div className="bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
-                  <span className="text-[10px] text-blue-700 font-semibold flex items-center space-x-1">
-                    <Truck className="w-3 h-3 text-blue-500" />
-                    <span>Freight E-Way</span>
+              {/* Active Reallocation Flow Summary */}
+              <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200 text-xs">
+                <div className="font-bold text-purple-900 flex items-center justify-between">
+                  <span>12 Active Reallocation Flows</span>
+                  <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 py-0.2 rounded font-mono">
+                    Min-Cost
                   </span>
-                  <div className="text-sm font-extrabold text-blue-900 mt-0.5">
-                    +{selectedDistrict.signals.eway_bills_growth_pct}%
-                  </div>
                 </div>
+                <p className="text-[11px] text-purple-800 mt-1 leading-relaxed">
+                  Dashed purple lines show live seat transfers from surplus industrial areas to high-shortage hubs, saving ₹88.62L in new centre capital expense.
+                </p>
+              </div>
 
-                <div className="bg-purple-50/70 p-2.5 rounded-xl border border-purple-100">
-                  <span className="text-[10px] text-purple-700 font-semibold flex items-center space-x-1">
-                    <CreditCard className="w-3 h-3 text-purple-500" />
-                    <span>MSME Credit</span>
-                  </span>
-                  <div className="text-sm font-extrabold text-purple-900 mt-0.5">
-                    +{selectedDistrict.signals.msme_credit_growth_pct}%
-                  </div>
-                </div>
-
-                <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100">
-                  <span className="text-[10px] text-emerald-700 font-semibold flex items-center space-x-1">
-                    <Briefcase className="w-3 h-3 text-emerald-500" />
-                    <span>Job Postings</span>
-                  </span>
-                  <div className="text-sm font-extrabold text-emerald-900 mt-0.5">
-                    {selectedDistrict.signals.online_postings_index} Idx
-                  </div>
-                </div>
+              <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-2 border-t border-slate-100">
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
+                <span>Survey of India Boundaries overlaid on Carto Light Canvas.</span>
               </div>
             </div>
+          )}
+        </div>
 
-            {/* District Trade Deficit Breakdown */}
-            <div>
-              <div className="flex justify-between items-center text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                <span>{lang === 'en' ? 'Critical Trades in Hub' : 'प्रमुख ट्रेड स्थिति'}</span>
-                <span className="text-slate-400 font-normal">Demand vs Supply</span>
-              </div>
+        {/* 4. Floating Right Controls: Basemap Selector & Reset */}
+        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex flex-col space-y-2">
+          {/* Reset View Button */}
+          <button
+            onClick={resetView}
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-md text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-all font-semibold text-xs flex items-center space-x-1.5"
+            title="Reset to India View"
+          >
+            <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />
+            <span className="hidden sm:inline">India View</span>
+          </button>
 
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                {districtRankings.map((tr) => (
-                  <div key={tr.trade_id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <div className="flex justify-between font-bold text-slate-800">
-                      <span className="truncate max-w-[190px]">
-                        {lang === 'hi' ? tr.trade_name_hi : tr.trade_name}
-                      </span>
-                      <span className={tr.net_gap > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                        {tr.net_gap > 0 ? `+${tr.net_gap}` : tr.net_gap}
-                      </span>
-                    </div>
+          {/* Toggle Boundary Overlay */}
+          <button
+            onClick={() => setShowSoiBoundary(prev => !prev)}
+            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 backdrop-blur-md rounded-xl border shadow-md transition-all text-xs font-semibold flex items-center space-x-1.5 ${
+              showSoiBoundary
+                ? 'bg-teal-700 text-white border-teal-700'
+                : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-100'
+            }`}
+            title="Toggle Survey of India Boundaries"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">SoI Border</span>
+          </button>
 
-                    <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                      <span>Demand: {tr.demand_p50}</span>
-                      <span>Supply: {tr.effective_supply}</span>
-                      <span className="font-semibold" style={{ color: tr.severity_color }}>
-                        {tr.severity_label}
-                      </span>
-                    </div>
+          {/* Toggle Reallocation Flow Lines */}
+          <button
+            onClick={() => setShowFlows(prev => !prev)}
+            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 backdrop-blur-md rounded-xl border shadow-md transition-all text-xs font-semibold flex items-center space-x-1.5 ${
+              showFlows
+                ? 'bg-purple-600 text-white border-purple-600'
+                : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-100'
+            }`}
+            title="Toggle Reallocation Flow Paths"
+          >
+            <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Flow Lines</span>
+          </button>
 
-                    <div className="flex items-center space-x-2 mt-2 pt-1 border-t border-slate-200/60">
-                      <button
-                        onClick={() => onSelectWhy(tr)}
-                        className="text-[10px] font-bold text-teal-700 hover:underline flex items-center space-x-0.5"
-                      >
-                        <HelpCircle className="w-3 h-3" />
-                        <span>Why?</span>
-                      </button>
-                      <span>·</span>
-                      <button
-                        onClick={() => onSelectSimulate(tr)}
-                        className="text-[10px] font-bold text-blue-700 hover:underline flex items-center space-x-0.5"
-                      >
-                        <Sliders className="w-3 h-3" />
-                        <span>Simulate</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+          {/* Free Basemap Tile Switcher */}
+          <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-md p-1 flex flex-col space-y-1 text-[10px] font-bold">
             <button
-              onClick={resetView}
-              className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all"
+              onClick={() => setTileLayer('carto')}
+              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'carto' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
             >
-              {lang === 'en' ? '← Back to National View' : '← राष्ट्रीय विहंगावलोकन पर वापस जाएं'}
+              Clean Positron
+            </button>
+            <button
+              onClick={() => setTileLayer('esri')}
+              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'esri' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              Esri Gray
+            </button>
+            <button
+              onClick={() => setTileLayer('osm')}
+              className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'osm' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              OpenStreetMap
             </button>
           </div>
-        ) : (
-          /* National View Panel */
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  {lang === 'en' ? 'Live Geospatial Intelligence' : 'सजीव स्थानिक आसूचना'}
-                </span>
-              </div>
-              <h3 className="text-base font-extrabold text-slate-900 mt-1">
-                {lang === 'en' ? 'National Skilling Corridors' : 'राष्ट्रीय कौशल गलियारा'}
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                {lang === 'en'
-                  ? 'Click any district node across India to inspect local industrial electricity surge, freight e-way bills, and trade deficits.'
-                  : 'स्थानीय औद्योगिक बिजली वृद्धि, ई-वे बिल और ट्रेड घाटे का निरीक्षण करने हेतु किसी भी ज़िला नोड पर क्लिक करें।'}
-              </p>
-            </div>
-
-            {/* Quick Metrics */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <span className="text-[10px] text-slate-400 font-semibold block">Monitored Hubs</span>
-                <span className="text-base font-extrabold text-slate-800">12 Districts</span>
-              </div>
-              <div className="bg-red-50/80 p-2.5 rounded-xl border border-red-100">
-                <span className="text-[10px] text-red-600 font-semibold block">Critical Deficits</span>
-                <span className="text-base font-extrabold text-red-700">3 Mega-Clusters</span>
-              </div>
-            </div>
-
-            {/* Active Reallocation Flow Summary */}
-            <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200 text-xs">
-              <div className="font-bold text-purple-900 flex items-center justify-between">
-                <span>12 Active Reallocation Flows</span>
-                <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 py-0.2 rounded font-mono">
-                  Min-Cost
-                </span>
-              </div>
-              <p className="text-[11px] text-purple-800 mt-1 leading-relaxed">
-                Dashed purple lines show live seat transfers from surplus industrial areas to high-shortage hubs, saving ₹88.62L in new centre capital expense.
-              </p>
-            </div>
-
-            <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-2 border-t border-slate-100">
-              <Info className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
-              <span>100% Free OpenStreetMap & Esri Gray Canvas (No API Keys required).</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 3. Floating Right Controls: Basemap Selector & Reset */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col space-y-2">
-        {/* Reset View Button */}
-        <button
-          onClick={resetView}
-          className="px-3 py-2 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-lg text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-all font-semibold text-xs flex items-center space-x-1.5"
-          title="Reset to India View"
-        >
-          <Compass className="w-4 h-4 text-teal-600" />
-          <span>India View</span>
-        </button>
-
-        {/* Toggle Reallocation Flow Lines */}
-        <button
-          onClick={() => setShowFlows(prev => !prev)}
-          className={`px-3 py-2 backdrop-blur-md rounded-xl border shadow-lg transition-all text-xs font-semibold flex items-center space-x-1.5 ${
-            showFlows
-              ? 'bg-purple-600 text-white border-purple-600'
-              : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-100'
-          }`}
-          title="Toggle Reallocation Flow Paths"
-        >
-          <ArrowRight className="w-4 h-4" />
-          <span>Flow Lines</span>
-        </button>
-
-        {/* Free Basemap Tile Switcher (Zero API Key) */}
-        <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-lg p-1.5 flex flex-col space-y-1 text-[10px] font-bold">
-          <button
-            onClick={() => setTileLayer('osm')}
-            className={`px-2.5 py-1 rounded transition-colors text-left ${tileLayer === 'osm' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            OpenStreetMap
-          </button>
-          <button
-            onClick={() => setTileLayer('esri')}
-            className={`px-2.5 py-1 rounded transition-colors text-left ${tileLayer === 'esri' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            Light Gray Canvas
-          </button>
-          <button
-            onClick={() => setTileLayer('hot')}
-            className={`px-2.5 py-1 rounded transition-colors text-left ${tileLayer === 'hot' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            OSM Humanitarian
-          </button>
         </div>
+
+        {/* 5. Mobile Bottom Drawer / Sheet Trigger (Shows on < sm screens!) */}
+        <div className="sm:hidden absolute bottom-3 inset-x-3 z-20">
+          <button
+            onClick={() => setIsMobilePanelOpen(prev => !prev)}
+            className="w-full bg-white/95 backdrop-blur-md border border-slate-300 shadow-xl rounded-xl py-2 px-3 flex items-center justify-between text-xs font-bold text-slate-800"
+          >
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
+              <span>
+                {selectedDistrict
+                  ? `${selectedDistrict.name} (${selectedDistrict.state_code})`
+                  : (lang === 'en' ? 'Tap to view Hub Intelligence' : 'हब आसूचना देखें')}
+              </span>
+            </div>
+            {isMobilePanelOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          </button>
+
+          {/* Mobile Slide-up Sheet */}
+          {isMobilePanelOpen && (
+            <div className="mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 max-h-[60vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
+              {selectedDistrict ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-extrabold text-slate-900 text-sm">{selectedDistrict.name}</h4>
+                      <span className="text-[11px] text-slate-500">{selectedDistrict.state_code} · Net Gap: {selectedDistrict.aggregate_gap}</span>
+                    </div>
+                    <button
+                      onClick={() => setIsMobilePanelOpen(false)}
+                      className="p-1 text-slate-400 hover:text-slate-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg">{selectedDistrict.profile}</p>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 bg-amber-50 rounded-lg border border-amber-100">
+                      <span className="text-[10px] text-amber-700">Power Surge</span>
+                      <div className="font-bold text-amber-900">+{selectedDistrict.signals.power_growth_pct}%</div>
+                    </div>
+                    <div className="p-2 bg-blue-50 rounded-lg border border-blue-100">
+                      <span className="text-[10px] text-blue-700">Freight E-Way</span>
+                      <div className="font-bold text-blue-900">+{selectedDistrict.signals.eway_bills_growth_pct}%</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Trades in Hub</span>
+                    {districtRankings.slice(0, 3).map(tr => (
+                      <div key={tr.trade_id} className="p-2 bg-slate-50 rounded-lg text-xs flex justify-between items-center">
+                        <div>
+                          <div className="font-bold text-slate-800 text-[11px]">{tr.trade_name}</div>
+                          <div className="text-[10px] text-slate-400">Demand: {tr.demand_p50} · Supply: {tr.effective_supply}</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            onSelectWhy(tr);
+                            setIsMobilePanelOpen(false);
+                          }}
+                          className="px-2 py-1 bg-teal-50 text-teal-700 rounded font-bold text-[10px]"
+                        >
+                          Why?
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs">
+                  <div className="font-bold text-slate-800">National Geospatial Overview</div>
+                  <p className="text-slate-500 text-[11px]">Tap any district bubble on the map to inspect leading telemetry signals and trade deficits.</p>
+                  <div className="grid grid-cols-2 gap-2 text-center pt-1">
+                    <div className="bg-slate-50 p-2 rounded-lg font-bold">12 Hubs</div>
+                    <div className="bg-red-50 text-red-700 p-2 rounded-lg font-bold">3 Deficits</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
 
     </div>
