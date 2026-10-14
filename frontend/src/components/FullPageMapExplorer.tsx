@@ -34,38 +34,37 @@ interface FullPageMapExplorerProps {
 function MapViewController({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
   useEffect(() => {
-    map.flyTo(center, zoom, { duration: 1.2 });
+    map.flyTo(center, zoom, { duration: 1.0 });
   }, [center, zoom, map]);
   return null;
 }
 
-// Create custom glowing Leaflet markers
+// Crisp, clean Leaflet markers without oversized blur smudges
 function createDistrictIcon(d: DistrictSummary, isSelected: boolean) {
   const isCritical = d.critical_shortages >= 2 || d.aggregate_gap > 300;
   const isWatch = d.aggregate_gap > 80;
   const isSurplus = d.aggregate_gap < -80;
 
-  const color = isCritical ? '#ef4444' : isWatch ? '#f97316' : isSurplus ? '#8b5cf6' : '#10b981';
+  const badgeColor = isCritical ? '#dc2626' : isWatch ? '#ea580c' : isSurplus ? '#7c3aed' : '#059669';
   const label = d.aggregate_gap > 0 ? `+${d.aggregate_gap}` : `${d.aggregate_gap}`;
 
   const html = `
-    <div class="relative flex items-center group cursor-pointer">
-      ${isCritical ? `<span class="absolute -inset-1 rounded-full animate-ping opacity-50" style="background-color: ${color}"></span>` : ''}
-      <div class="relative flex items-center px-2 py-1 rounded-full text-white font-extrabold text-[11px] shadow-lg border-2 ${
-        isSelected ? 'border-slate-900 ring-2 ring-white scale-110' : 'border-white'
-      }" style="background-color: ${color}">
-        <span class="w-2 h-2 rounded-full bg-white mr-1.5 ${isCritical ? 'animate-pulse' : ''}"></span>
-        <span>${d.name.split(' ')[0]}</span>
-        <span class="ml-1 text-[9px] font-mono px-1 rounded bg-black/20">${label}</span>
+    <div class="relative inline-flex items-center group cursor-pointer transition-transform duration-150 hover:scale-110">
+      <div class="flex items-center bg-white/95 text-slate-800 rounded-full px-2 py-0.5 shadow-md border ${
+        isSelected ? 'border-teal-600 ring-2 ring-teal-500 scale-105' : 'border-slate-300'
+      }">
+        <span class="w-2.5 h-2.5 rounded-full mr-1.5 flex-shrink-0" style="background-color: ${badgeColor}"></span>
+        <span class="font-extrabold text-[11px] text-slate-900 tracking-tight">${d.name.split(' ')[0]}</span>
+        <span class="ml-1 text-[9px] font-bold px-1.5 py-0.2 rounded text-white font-mono" style="background-color: ${badgeColor}">${label}</span>
       </div>
     </div>
   `;
 
   return L.divIcon({
     html,
-    className: 'custom-leaflet-district-marker',
-    iconSize: [110, 30],
-    iconAnchor: [55, 15]
+    className: 'custom-clean-district-marker',
+    iconSize: [120, 26],
+    iconAnchor: [60, 13]
   });
 }
 
@@ -79,31 +78,40 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   t
 }) => {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictSummary | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([21.5, 79.5]); // Central India view
+  const [mapCenter, setMapCenter] = useState<[number, number]>([22.0, 79.0]); // Centered on India
   const [mapZoom, setMapZoom] = useState<number>(5);
   const [showFlows, setShowFlows] = useState<boolean>(true);
-  const [tileLayer, setTileLayer] = useState<'osm' | 'voyager' | 'dark'>('voyager');
+  const [tileLayer, setTileLayer] = useState<'osm' | 'esri' | 'hot'>('osm');
 
-  // Tile layer URLs
-  const tileUrls = {
-    voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+  // 100% Free Tile Providers - ZERO API Key Required, No Watermark!
+  const tileConfigs = {
+    osm: {
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    },
+    esri: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
+    },
+    hot: {
+      url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team'
+    }
   };
 
   const handleDistrictClick = (d: DistrictSummary) => {
     setSelectedDistrict(d);
     setMapCenter([d.lat, d.lng]);
-    setMapZoom(8);
+    setMapZoom(7);
   };
 
   const resetView = () => {
     setSelectedDistrict(null);
-    setMapCenter([21.5, 79.5]);
+    setMapCenter([22.0, 79.0]);
     setMapZoom(5);
   };
 
-  // Filter rankings for the selected district
+  // Filter rankings for selected district
   const districtRankings = selectedDistrict
     ? rankings.filter(r => r.district_lgd === selectedDistrict.lgd)
     : [];
@@ -113,20 +121,23 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
   districts.forEach(d => districtCoordsMap.set(d.lgd, [d.lat, d.lng]));
 
   return (
-    <div className="relative w-full h-[calc(100vh-145px)] min-h-[600px] rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900">
+    <div className="relative w-full h-[calc(100vh-140px)] min-h-[620px] rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100">
       
-      {/* 1. Leaflet Interactive Full-Page Map */}
+      {/* 1. Leaflet Map with 100% Free OpenStreetMap Tiles */}
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
+        minZoom={4}
+        maxZoom={18}
         className="w-full h-full z-0"
         zoomControl={false}
       >
         <MapViewController center={mapCenter} zoom={mapZoom} />
 
+        {/* Free TileLayer with zero API key */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
-          url={tileUrls[tileLayer]}
+          url={tileConfigs[tileLayer].url}
+          attribution={tileConfigs[tileLayer].attribution}
           maxZoom={18}
         />
 
@@ -141,9 +152,9 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
               key={rec.id}
               positions={[p1, p2]}
               pathOptions={{
-                color: '#8b5cf6',
-                weight: 3,
-                dashArray: '6, 8',
+                color: '#7c3aed',
+                weight: 2.5,
+                dashArray: '5, 8',
                 opacity: 0.85
               }}
             >
@@ -164,7 +175,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
           );
         })}
 
-        {/* District Markers with Live Badges */}
+        {/* Clean District Markers */}
         {districts.map((d) => (
           <Marker
             key={d.lgd}
@@ -175,30 +186,39 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
             }}
           >
             <Popup>
-              <div className="p-2 text-xs min-w-[200px]">
+              <div className="p-2 text-xs min-w-[210px]">
                 <div className="flex justify-between items-start font-bold text-slate-900">
-                  <span>{lang === 'hi' ? d.name_hi : d.name}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">{d.state_code}</span>
+                  <span className="text-sm">{lang === 'hi' ? d.name_hi : d.name}</span>
+                  <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.2 rounded">
+                    {d.state_code}
+                  </span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{d.profile}</p>
+                <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{d.profile}</p>
                 
-                <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between text-[11px]">
-                  <span>Net Gap:</span>
-                  <strong className={d.aggregate_gap > 0 ? 'text-red-600' : 'text-emerald-600'}>
-                    {d.aggregate_gap > 0 ? `+${d.aggregate_gap} Deficit` : `${d.aggregate_gap} Balanced`}
-                  </strong>
-                </div>
+                <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Net Labour Gap:</span>
+                    <strong className={d.aggregate_gap > 0 ? 'text-red-600' : 'text-emerald-600'}>
+                      {d.aggregate_gap > 0 ? `+${d.aggregate_gap} Deficit` : `${d.aggregate_gap} Balanced`}
+                    </strong>
+                  </div>
 
-                <div className="mt-1 flex justify-between text-[11px]">
-                  <span>Power Surge:</span>
-                  <strong className="text-amber-600 font-mono">+{d.signals.power_growth_pct}%</strong>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Power Surge:</span>
+                    <strong className="text-amber-600 font-mono">+{d.signals.power_growth_pct}%</strong>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Freight E-Way:</span>
+                    <strong className="text-blue-600 font-mono">+{d.signals.eway_bills_growth_pct}%</strong>
+                  </div>
                 </div>
 
                 <button
                   onClick={() => handleDistrictClick(d)}
-                  className="w-full mt-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded font-bold text-[10px]"
+                  className="w-full mt-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-xs transition-colors shadow-2xs"
                 >
-                  {lang === 'en' ? 'Open Detailed Zone Panel' : 'विस्तृत ज़ोन पैनल खोलें'}
+                  {lang === 'en' ? 'Open Zone Intelligence Panel' : 'ज़ोन आसूचना पैनल खोलें'}
                 </button>
               </div>
             </Popup>
@@ -206,8 +226,8 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
         ))}
       </MapContainer>
 
-      {/* 2. Floating Left Intelligence Panel (matching Electricity Maps Zone Details Panel!) */}
-      <div className={`absolute top-4 left-4 z-20 w-80 sm:w-96 max-h-[calc(100%-32px)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-2xl p-5 transition-all duration-300 ${
+      {/* 2. Floating Left Intelligence Panel (Electricity Maps Reference) */}
+      <div className={`absolute top-4 left-4 z-20 w-80 sm:w-96 max-h-[calc(100%-32px)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xl p-5 transition-all duration-300 ${
         selectedDistrict ? 'ring-2 ring-teal-500' : ''
       }`}>
         {selectedDistrict ? (
@@ -216,9 +236,9 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center space-x-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {lang === 'en' ? 'District Intelligence Zone' : 'ज़िला आसूचना क्षेत्र'}
+                    {lang === 'en' ? 'District Zone Active' : 'सक्रिय ज़िला क्षेत्र'}
                   </span>
                 </div>
                 <h3 className="text-lg font-extrabold text-slate-900 mt-0.5">
@@ -232,7 +252,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
               <button
                 onClick={resetView}
                 className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Close and return to National View"
+                title="Return to National View"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -344,7 +364,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
               onClick={resetView}
               className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all"
             >
-              {lang === 'en' ? '← Back to National Overview' : '← राष्ट्रीय विहंगावलोकन पर वापस जाएं'}
+              {lang === 'en' ? '← Back to National View' : '← राष्ट्रीय विहंगावलोकन पर वापस जाएं'}
             </button>
           </div>
         ) : (
@@ -362,7 +382,7 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
               </h3>
               <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 {lang === 'en'
-                  ? 'Click any district node to inspect local industrial electricity surge, freight e-way bills, and trade deficits.'
+                  ? 'Click any district node across India to inspect local industrial electricity surge, freight e-way bills, and trade deficits.'
                   : 'स्थानीय औद्योगिक बिजली वृद्धि, ई-वे बिल और ट्रेड घाटे का निरीक्षण करने हेतु किसी भी ज़िला नोड पर क्लिक करें।'}
               </p>
             </div>
@@ -388,13 +408,13 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-purple-800 mt-1 leading-relaxed">
-                Dashed purple lines show live optimized seat transfers from surplus industrial areas to high-shortage hubs, saving ₹88.62L in new centre capital expense.
+                Dashed purple lines show live seat transfers from surplus industrial areas to high-shortage hubs, saving ₹88.62L in new centre capital expense.
               </p>
             </div>
 
             <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 pt-2 border-t border-slate-100">
               <Info className="w-3.5 h-3.5 text-teal-600 flex-shrink-0" />
-              <span>Pan and zoom anywhere across India with OpenStreetMap tiles.</span>
+              <span>100% Free OpenStreetMap & Esri Gray Canvas (No API Keys required).</span>
             </div>
           </div>
         )}
@@ -405,17 +425,17 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
         {/* Reset View Button */}
         <button
           onClick={resetView}
-          className="p-2.5 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-lg text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-all font-semibold text-xs flex items-center space-x-1.5"
+          className="px-3 py-2 bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-lg text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-all font-semibold text-xs flex items-center space-x-1.5"
           title="Reset to India View"
         >
           <Compass className="w-4 h-4 text-teal-600" />
-          <span className="hidden sm:inline">India View</span>
+          <span>India View</span>
         </button>
 
         {/* Toggle Reallocation Flow Lines */}
         <button
           onClick={() => setShowFlows(prev => !prev)}
-          className={`p-2.5 backdrop-blur-md rounded-xl border shadow-lg transition-all text-xs font-semibold flex items-center space-x-1.5 ${
+          className={`px-3 py-2 backdrop-blur-md rounded-xl border shadow-lg transition-all text-xs font-semibold flex items-center space-x-1.5 ${
             showFlows
               ? 'bg-purple-600 text-white border-purple-600'
               : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-100'
@@ -423,28 +443,28 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
           title="Toggle Reallocation Flow Paths"
         >
           <ArrowRight className="w-4 h-4" />
-          <span className="hidden sm:inline">Flow Lines</span>
+          <span>Flow Lines</span>
         </button>
 
-        {/* Basemap Tile Switcher */}
+        {/* Free Basemap Tile Switcher (Zero API Key) */}
         <div className="bg-white/95 backdrop-blur-md rounded-xl border border-slate-200 shadow-lg p-1.5 flex flex-col space-y-1 text-[10px] font-bold">
           <button
-            onClick={() => setTileLayer('voyager')}
-            className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'voyager' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            Light Carto
-          </button>
-          <button
             onClick={() => setTileLayer('osm')}
-            className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'osm' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            className={`px-2.5 py-1 rounded transition-colors text-left ${tileLayer === 'osm' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
           >
             OpenStreetMap
           </button>
           <button
-            onClick={() => setTileLayer('dark')}
-            className={`px-2 py-1 rounded transition-colors text-left ${tileLayer === 'dark' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+            onClick={() => setTileLayer('esri')}
+            className={`px-2.5 py-1 rounded transition-colors text-left ${tileLayer === 'esri' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
           >
-            Dark Mode
+            Light Gray Canvas
+          </button>
+          <button
+            onClick={() => setTileLayer('hot')}
+            className={`px-2.5 py-1 rounded transition-colors text-left ${tileLayer === 'hot' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            OSM Humanitarian
           </button>
         </div>
       </div>
