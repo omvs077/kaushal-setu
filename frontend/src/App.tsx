@@ -21,8 +21,7 @@ import { RecommendationsPanel } from './components/RecommendationsPanel';
 import { WhatIfSimulator } from './components/WhatIfSimulator';
 import { AlertsCenter } from './components/AlertsCenter';
 import { AuditAndSourcesModal } from './components/AuditAndSourcesModal';
-
-const API_BASE = 'http://127.0.0.1:8000/api';
+import { API_BASE } from './config/api';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');

@@ -41,9 +41,10 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Enable CORS for frontend development and production
+# Enable CORS for frontend development and production (supports local + deployed domains)
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"https?://.*",
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],

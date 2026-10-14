@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RankingItem, SimulationResult, Language } from '../types';
 import { Sliders, RefreshCw, ArrowRight, CheckCircle2, TrendingUp, AlertCircle, X } from 'lucide-react';
+import { API_BASE } from '../config/api';
 
 interface WhatIfSimulatorProps {
   initialItem: RankingItem | null;
@@ -26,7 +27,7 @@ export const WhatIfSimulator: React.FC<WhatIfSimulatorProps> = ({
   const runSimulation = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/simulate', {
+      const res = await fetch(`${API_BASE}/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

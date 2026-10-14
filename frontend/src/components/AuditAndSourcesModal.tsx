@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SourceItem, AuditRecord, Language } from '../types';
 import { X, ShieldCheck, Database, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { API_BASE } from '../config/api';
 
 interface AuditAndSourcesModalProps {
   isOpen: boolean;
@@ -26,8 +27,8 @@ export const AuditAndSourcesModal: React.FC<AuditAndSourcesModalProps> = ({
     setLoading(true);
 
     Promise.all([
-      fetch('http://127.0.0.1:8000/api/sources').then(r => r.json()),
-      fetch('http://127.0.0.1:8000/api/audit/logs').then(r => r.json())
+      fetch(`${API_BASE}/sources`).then(r => r.json()),
+      fetch(`${API_BASE}/audit/logs`).then(r => r.json())
     ])
       .then(([srcData, auditData]) => {
         setSources(srcData.sources || []);
