@@ -1,7 +1,6 @@
 import React from 'react';
 import { Language, UserRole } from '../types';
 import {
-  Bell,
   Search,
   Globe,
   ShieldCheck,
@@ -11,19 +10,15 @@ import {
   ArrowRightLeft,
   Sliders,
   BellRing,
-  Database,
   Map,
-  UserCheck,
-  SplitSquareVertical
+  UserCheck
 } from 'lucide-react';
 
-export type ActiveTab = 'dashboard' | 'rankings' | 'reallocation' | 'simulator' | 'alerts' | 'audit';
+export type ActiveTab = 'dashboard' | 'map' | 'rankings' | 'reallocation' | 'simulator' | 'alerts' | 'audit';
 
 interface KapellaNavbarProps {
   activeTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
-  isSplitMapOpen: boolean;
-  onToggleSplitMap: () => void;
   lang: Language;
   onLanguageChange: (lang: Language) => void;
   currentRole: UserRole;
@@ -40,8 +35,6 @@ interface KapellaNavbarProps {
 export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
   activeTab,
   onSelectTab,
-  isSplitMapOpen,
-  onToggleSplitMap,
   lang,
   onLanguageChange,
   currentRole,
@@ -95,23 +88,20 @@ export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
             />
           </div>
 
-          {/* RIGHT: Live Split Map Toggle, Language, Role Selector, Export */}
+          {/* RIGHT: Language, Role Selector, Target Pack */}
           <div className="flex items-center space-x-2.5">
             
-            {/* Split Screen Live Map Toggle Button */}
+            {/* Quick Map Tab Jump Button */}
             <button
-              onClick={onToggleSplitMap}
+              onClick={() => onSelectTab('map')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
-                isSplitMapOpen
+                activeTab === 'map'
                   ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
                   : 'bg-white text-teal-800 border-teal-200 hover:bg-teal-50'
               }`}
-              title={lang === 'en' ? 'Toggle Split Window Map' : 'स्प्लिट स्क्रीन मानचित्र टॉगल करें'}
             >
               <Map className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {isSplitMapOpen ? (lang === 'en' ? 'Hide Map' : 'मानचित्र छिपाएं') : (lang === 'en' ? 'Live Map' : 'लाइव मैप')}
-              </span>
+              <span>{lang === 'en' ? 'Live Map' : 'लाइव मैप'}</span>
             </button>
 
             {/* Persona / Scoping Selector */}
@@ -172,7 +162,23 @@ export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
               <span>{t('overview')}</span>
             </button>
 
-            {/* Tab 2: Rankings & Gaps */}
+            {/* Tab 2: Live Map Explorer (Full Page!) */}
+            <button
+              onClick={() => onSelectTab('map')}
+              className={`flex items-center space-x-2 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
+                activeTab === 'map'
+                  ? 'text-teal-700 bg-teal-50 border-b-2 border-teal-600'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Map className="w-4 h-4 text-emerald-600" />
+              <span>{lang === 'en' ? 'Live Map Explorer' : 'लाइव मैप एक्सप्लोरर'}</span>
+              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold uppercase">
+                OSM
+              </span>
+            </button>
+
+            {/* Tab 3: Rankings & Gaps */}
             <button
               onClick={() => onSelectTab('rankings')}
               className={`flex items-center space-x-2 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
@@ -185,7 +191,7 @@ export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
               <span>{t('rankings')}</span>
             </button>
 
-            {/* Tab 3: Seat Reallocation */}
+            {/* Tab 4: Seat Reallocation */}
             <button
               onClick={() => onSelectTab('reallocation')}
               className={`flex items-center space-x-2 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
@@ -203,7 +209,7 @@ export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
               )}
             </button>
 
-            {/* Tab 4: What-If Simulator */}
+            {/* Tab 5: What-If Simulator */}
             <button
               onClick={() => onSelectTab('simulator')}
               className={`flex items-center space-x-2 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
@@ -216,7 +222,7 @@ export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
               <span>{t('simulator')}</span>
             </button>
 
-            {/* Tab 5: Early Warning Alerts */}
+            {/* Tab 6: Early Warning Alerts */}
             <button
               onClick={() => onSelectTab('alerts')}
               className={`flex items-center space-x-2 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
@@ -234,7 +240,7 @@ export const KapellaNavbar: React.FC<KapellaNavbarProps> = ({
               )}
             </button>
 
-            {/* Tab 6: Data Sources & Audit */}
+            {/* Tab 7: Data Sources & Audit */}
             <button
               onClick={() => onSelectTab('audit')}
               className={`flex items-center space-x-2 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${
