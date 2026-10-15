@@ -25,6 +25,7 @@ interface RankingsTableProps {
   onSelectWhy: (item: RankingItem) => void;
   onSelectSimulate: (item: RankingItem) => void;
   isCompactSplitView?: boolean;
+  loading?: boolean;
   t: (key: string) => string;
 }
 
@@ -42,6 +43,7 @@ export const RankingsTable: React.FC<RankingsTableProps> = ({
   onSelectWhy,
   onSelectSimulate,
   isCompactSplitView = false,
+  loading = false,
   t
 }) => {
   return (
@@ -155,7 +157,58 @@ export const RankingsTable: React.FC<RankingsTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {items.map((row) => {
+            {loading ? (
+              // Loading Skeleton Rows
+              [1, 2, 3, 4, 5, 6, 7, 8].map((row) => (
+                <tr key={row} className="animate-pulse">
+                  <td className="px-3 py-3 text-center">
+                    <div className="w-5 h-3.5 bg-slate-200/80 rounded-full mx-auto" />
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="w-28 h-3.5 bg-slate-200/80 rounded-full mb-1" />
+                    <div className="w-16 h-2 bg-slate-100 rounded-full" />
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="w-36 h-3.5 bg-slate-200/80 rounded-full" />
+                  </td>
+                  {!isCompactSplitView && (
+                    <td className="px-3 py-3">
+                      <div className="w-20 h-3 bg-slate-200/70 rounded-full" />
+                    </td>
+                  )}
+                  <td className="px-3 py-3 text-right">
+                    <div className="w-12 h-3.5 bg-slate-200/80 rounded-full ml-auto" />
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <div className="w-12 h-3.5 bg-slate-200/80 rounded-full ml-auto" />
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <div className="w-12 h-3.5 bg-slate-200/80 rounded-full ml-auto" />
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <div className="w-20 h-5 bg-slate-200/70 rounded-full mx-auto" />
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <div className="w-24 h-6 bg-slate-100 rounded-md mx-auto" />
+                  </td>
+                </tr>
+              ))
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={isCompactSplitView ? 8 : 9} className="py-12 text-center text-slate-400">
+                  <div className="flex flex-col items-center justify-center">
+                    <Filter className="w-8 h-8 text-slate-300 mb-2" />
+                    <p className="text-sm font-semibold text-slate-600">
+                      {lang === 'hi' ? 'कोई रिकॉर्ड नहीं मिला' : 'No matching records found'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {lang === 'hi' ? 'कृपया अपने फ़िल्टर समायोजित करें' : 'Try adjusting the state, sector, or horizon filters'}
+                    </p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              items.map((row) => {
               const isShortage = row.net_gap > 0;
               return (
                 <tr key={`${row.district_lgd}-${row.trade_id}`} className="hover:bg-teal-50/30 transition-colors">
@@ -262,7 +315,8 @@ export const RankingsTable: React.FC<RankingsTableProps> = ({
 
                 </tr>
               );
-            })}
+            })
+          )}
           </tbody>
         </table>
       </div>

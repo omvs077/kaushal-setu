@@ -1,6 +1,7 @@
 import React from 'react';
 import { OverviewData, Language } from '../types';
 import { TrendingUp, Users, AlertTriangle, ArrowRightLeft, ShieldCheck, MapPin, Factory } from 'lucide-react';
+import { MetricTilesSkeleton } from './LoadingSkeletons';
 
 interface KapellaMetricTilesProps {
   overview: OverviewData | null;
@@ -13,7 +14,7 @@ export const KapellaMetricTiles: React.FC<KapellaMetricTilesProps> = ({
   lang,
   t
 }) => {
-  if (!overview) return null;
+  if (!overview) return <MetricTilesSkeleton />;
 
   const k = overview.kpis;
   const demandCoveragePct = 78;

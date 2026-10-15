@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { OverviewData, Language } from '../types';
 import { Zap, Truck, CreditCard, Briefcase, Sparkles, AlertCircle, ArrowUpRight } from 'lucide-react';
+import { ChartsSkeleton } from './LoadingSkeletons';
 
 interface KapellaChartsProps {
   overview: OverviewData | null;
@@ -18,7 +19,7 @@ export const KapellaCharts: React.FC<KapellaChartsProps> = ({
 }) => {
   const [hoveredSlice, setHoveredSlice] = useState<{ name: string; value: number; color: string } | null>(null);
 
-  if (!overview) return null;
+  if (!overview) return <ChartsSkeleton />;
 
   // Donut chart data from severity distribution
   const dist = overview.severity_distribution;

@@ -5,12 +5,14 @@ import { ArrowRight, Check, ArrowRightLeft, Sparkles, MapPin, IndianRupee } from
 interface RecommendationsPanelProps {
   recommendations: RecommendationItem[];
   lang: Language;
+  loading?: boolean;
   t: (key: string) => string;
 }
 
 export const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
   recommendations,
   lang,
+  loading = false,
   t
 }) => {
   const [approvedIds, setApprovedIds] = useState<Record<string, boolean>>({});
@@ -62,7 +64,39 @@ export const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
 
       {/* Cards List */}
       <div className="divide-y divide-slate-100 p-2">
-        {recommendations.slice(0, 6).map((rec) => {
+        {loading ? (
+          // Loading Skeleton Cards
+          [1, 2, 3, 4].map((i) => (
+            <div key={i} className="p-4 rounded-xl animate-pulse">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="space-y-3 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="w-32 h-6 bg-slate-200/80 rounded-lg" />
+                    <div className="w-4 h-4 bg-slate-200/60 rounded" />
+                    <div className="w-32 h-6 bg-slate-200/80 rounded-lg" />
+                    <div className="w-28 h-5 bg-slate-100 rounded" />
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-24 h-3 bg-slate-200/60 rounded-full" />
+                    <div className="w-20 h-3 bg-slate-200/60 rounded-full" />
+                    <div className="w-28 h-3 bg-slate-200/60 rounded-full" />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-24 h-8 bg-slate-200/80 rounded-lg" />
+                  <div className="w-36 h-9 bg-slate-200/90 rounded-lg" />
+                </div>
+              </div>
+            </div>
+          ))
+        ) : recommendations.length === 0 ? (
+          <div className="py-12 text-center text-slate-400">
+            <p className="text-sm font-semibold text-slate-600">
+              {lang === 'hi' ? 'कोई पुनर्वितरण प्रस्ताव उपलब्ध नहीं है' : 'No reallocation proposals for current filters'}
+            </p>
+          </div>
+        ) : (
+          recommendations.slice(0, 6).map((rec) => {
           const isApproved = approvedIds[rec.id];
 
           return (
@@ -143,7 +177,8 @@ export const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
               </div>
             </div>
           );
-        })}
+        })
+      )}
       </div>
 
     </div>

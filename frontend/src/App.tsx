@@ -21,6 +21,8 @@ import { RecommendationsPanel } from './components/RecommendationsPanel';
 import { WhatIfSimulator } from './components/WhatIfSimulator';
 import { AlertsCenter } from './components/AlertsCenter';
 import { AuditAndSourcesModal } from './components/AuditAndSourcesModal';
+import { RenderWakeupBanner } from './components/RenderWakeupBanner';
+import { DashboardClustersSkeleton, DashboardReallocationsSkeleton } from './components/LoadingSkeletons';
 import { API_BASE } from './config/api';
 
 export function App() {
@@ -43,6 +45,8 @@ export function App() {
   const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [backendStatus, setBackendStatus] = useState<'waking' | 'connecting' | 'connected' | 'idle'>('waking');
+  const [wakeAttempt, setWakeAttempt] = useState<number>(1);
 
   // Modals & Drawers
   const [activeWhyItem, setActiveWhyItem] = useState<RankingItem | null>(null);
@@ -64,71 +68,112 @@ export function App() {
   }, [role]);
 
   // Fetch Overview Data
-  const fetchOverview = () => {
+  const fetchOverview = async () => {
     const params = new URLSearchParams();
     if (selectedState) params.append('state_code', selectedState);
     params.append('horizon_months', selectedHorizon.toString());
 
-    fetch(`${API_BASE}/overview?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => setOverview(data))
-      .catch(err => console.error('Error fetching overview:', err));
+    const res = await fetch(`${API_BASE}/overview?${params.toString()}`);
+    if (!res.ok) throw new Error(`Overview returned ${res.status}`);
+    const data = await res.json();
+    setOverview(data);
+    return data;
   };
 
   // Fetch Districts Data for Live Map
-  const fetchDistricts = () => {
+  const fetchDistricts = async () => {
     const params = new URLSearchParams();
     if (selectedState) params.append('state_code', selectedState);
 
-    fetch(`${API_BASE}/districts?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => setDistricts(data || []))
-      .catch(err => console.error('Error fetching districts:', err));
+    const res = await fetch(`${API_BASE}/districts?${params.toString()}`);
+    if (!res.ok) throw new Error(`Districts returned ${res.status}`);
+    const data = await res.json();
+    setDistricts(data || []);
+    return data;
   };
 
   // Fetch Rankings Data
-  const fetchRankings = () => {
+  const fetchRankings = async () => {
     const params = new URLSearchParams();
     if (selectedState) params.append('state_code', selectedState);
     if (selectedSector) params.append('sector_id', selectedSector);
     if (selectedBand) params.append('severity_band', selectedBand);
     params.append('horizon_months', selectedHorizon.toString());
 
-    fetch(`${API_BASE}/rankings?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => setRankings(data.items || []))
-      .catch(err => console.error('Error fetching rankings:', err));
+    const res = await fetch(`${API_BASE}/rankings?${params.toString()}`);
+    if (!res.ok) throw new Error(`Rankings returned ${res.status}`);
+    const data = await res.json();
+    setRankings(data.items || []);
+    return data;
   };
 
   // Fetch Recommendations Data
-  const fetchRecommendations = () => {
-    fetch(`${API_BASE}/recommendations?horizon_months=${selectedHorizon}`)
-      .then(res => res.json())
-      .then(data => setRecommendations(data.recommendations || []))
-      .catch(err => console.error('Error fetching recommendations:', err));
+  const fetchRecommendations = async () => {
+    const res = await fetch(`${API_BASE}/recommendations?horizon_months=${selectedHorizon}`);
+    if (!res.ok) throw new Error(`Recommendations returned ${res.status}`);
+    const data = await res.json();
+    setRecommendations(data.recommendations || []);
+    return data;
   };
 
   // Fetch Alerts Data
-  const fetchAlerts = () => {
+  const fetchAlerts = async () => {
     const params = new URLSearchParams();
     if (selectedState) params.append('state_code', selectedState);
 
-    fetch(`${API_BASE}/alerts?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => setAlerts(data.alerts || []))
-      .catch(err => console.error('Error fetching alerts:', err));
+    const res = await fetch(`${API_BASE}/alerts?${params.toString()}`);
+    if (!res.ok) throw new Error(`Alerts returned ${res.status}`);
+    const data = await res.json();
+    setAlerts(data.alerts || []);
+    return data;
   };
 
-  // Initial & Filter Data Loading
+  // Initial & Filter Data Loading with Automatic Polling for Render Spin-up
   useEffect(() => {
+    let isMounted = true;
+    let attemptCount = 0;
+    let retryTimer: any = null;
+
+    const loadAll = async () => {
+      attemptCount++;
+      if (isMounted) setWakeAttempt(attemptCount);
+
+      try {
+        await Promise.all([
+          fetchOverview(),
+          fetchDistricts(),
+          fetchRankings(),
+          fetchRecommendations(),
+          fetchAlerts()
+        ]);
+
+        if (isMounted) {
+          setLoading(false);
+          setBackendStatus('connected');
+          // Hide banner smoothly after 2.5 seconds of successful connection
+          setTimeout(() => {
+            if (isMounted) setBackendStatus('idle');
+          }, 2500);
+        }
+      } catch (err) {
+        console.warn(`Render backend waking up (attempt ${attemptCount}):`, err);
+        if (isMounted) {
+          setBackendStatus('waking');
+          // If still sleeping, retry every 3s up to 25 times (~75 seconds)
+          if (attemptCount < 25) {
+            retryTimer = setTimeout(loadAll, 3000);
+          }
+        }
+      }
+    };
+
     setLoading(true);
-    Promise.all([
-      fetchOverview(),
-      fetchDistricts(),
-      fetchRankings(),
-      fetchRecommendations(),
-      fetchAlerts()
-    ]).finally(() => setLoading(false));
+    loadAll();
+
+    return () => {
+      isMounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [selectedState, selectedSector, selectedHorizon, selectedBand]);
 
   // Client-side search filtering
@@ -184,6 +229,9 @@ export function App() {
           </div>
         )}
 
+        {/* Render Backend Wake-up / Starting Banner (Matches Reference Image) */}
+        <RenderWakeupBanner status={backendStatus} lang={lang} attempt={wakeAttempt} />
+
         {/* ================= TAB 1: EXECUTIVE DASHBOARD ================= */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in duration-200">
@@ -204,10 +252,16 @@ export function App() {
 
             {/* Quick Priority Action Tables */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Left: Top 5 Priority Shortage Trades */}
-              <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.05)]">
-                <div className="flex items-center justify-between mb-4">
+              {loading ? (
+                <>
+                  <DashboardClustersSkeleton lang={lang} />
+                  <DashboardReallocationsSkeleton lang={lang} />
+                </>
+              ) : (
+                <>
+                  {/* Left: Top 5 Priority Shortage Trades */}
+                  <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-100 p-5 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.05)]">
+                    <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">
                       {lang === 'en' ? 'Top Shortage Watch Clusters' : 'शीर्ष कमी निगरानी समूह'}
@@ -304,9 +358,10 @@ export function App() {
                   <span className="font-bold text-emerald-600">Converged (Optimal)</span>
                 </div>
               </div>
-
-            </div>
+            </>
+          )}
           </div>
+        </div>
         )}
 
         {/* ================= TAB 2: LIVE MAP EXPLORER (DEDICATED FULL-PAGE!) ================= */}
@@ -329,6 +384,7 @@ export function App() {
           <div className="space-y-4 animate-in fade-in duration-200">
             <RankingsTable
               items={filteredRankings}
+              loading={loading}
               lang={lang}
               selectedState={selectedState}
               onStateChange={setSelectedState}
@@ -351,6 +407,7 @@ export function App() {
           <div className="space-y-6 animate-in fade-in duration-200">
             <RecommendationsPanel
               recommendations={recommendations}
+              loading={loading}
               lang={lang}
               t={t}
             />
@@ -374,6 +431,7 @@ export function App() {
           <div className="space-y-6 animate-in fade-in duration-200">
             <AlertsCenter
               alerts={alerts}
+              loading={loading}
               lang={lang}
               t={t}
             />

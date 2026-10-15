@@ -5,10 +5,11 @@ import { Bell, Check, ShieldAlert, ArrowUpRight, Clock } from 'lucide-react';
 interface AlertsCenterProps {
   alerts: AlertItem[];
   lang: Language;
+  loading?: boolean;
   t: (key: string) => string;
 }
 
-export const AlertsCenter: React.FC<AlertsCenterProps> = ({ alerts, lang, t }) => {
+export const AlertsCenter: React.FC<AlertsCenterProps> = ({ alerts, lang, loading = false, t }) => {
   const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({});
 
   const toggleAcknowledge = (id: string) => {
@@ -32,7 +33,7 @@ export const AlertsCenter: React.FC<AlertsCenterProps> = ({ alerts, lang, t }) =
                 {t('alerts')}
               </h2>
               <span className="text-xs bg-red-100 text-red-800 font-bold px-2 py-0.5 rounded-full">
-                {activeAlerts.length} {lang === 'en' ? 'Active' : 'सक्रिय'}
+                {loading ? '...' : activeAlerts.length} {lang === 'en' ? 'Active' : 'सक्रिय'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -46,7 +47,32 @@ export const AlertsCenter: React.FC<AlertsCenterProps> = ({ alerts, lang, t }) =
 
       {/* Alerts List */}
       <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-        {alerts.slice(0, 10).map((alert) => {
+        {loading ? (
+          // Loading Skeleton Alerts
+          [1, 2, 3, 4].map((i) => (
+            <div key={i} className="p-4 animate-pulse">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="space-y-2 flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-4 bg-red-100/80 rounded" />
+                    <div className="w-36 h-4 bg-slate-200/80 rounded" />
+                    <div className="w-20 h-3 bg-slate-100 rounded" />
+                  </div>
+                  <div className="w-3/4 h-3 bg-slate-200/70 rounded-full" />
+                  <div className="w-40 h-2.5 bg-slate-100 rounded-full" />
+                </div>
+                <div className="w-24 h-7 bg-slate-100 rounded-lg" />
+              </div>
+            </div>
+          ))
+        ) : alerts.length === 0 ? (
+          <div className="py-12 text-center text-slate-400">
+            <p className="text-sm font-semibold text-slate-600">
+              {lang === 'hi' ? 'कोई सक्रिय चेतावनी नहीं है' : 'No active alert flags'}
+            </p>
+          </div>
+        ) : (
+          alerts.slice(0, 10).map((alert) => {
           const isAck = acknowledged[alert.id];
 
           return (
@@ -109,7 +135,8 @@ export const AlertsCenter: React.FC<AlertsCenterProps> = ({ alerts, lang, t }) =
               </div>
             </div>
           );
-        })}
+        })
+      )}
       </div>
 
     </div>

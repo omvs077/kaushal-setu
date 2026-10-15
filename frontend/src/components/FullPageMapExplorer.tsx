@@ -331,6 +331,14 @@ export const FullPageMapExplorer: React.FC<FullPageMapExplorerProps> = ({
           ))}
         </MapContainer>
 
+        {/* Loading Indicator for district markers & telemetry */}
+        {districts.length === 0 && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-white/95 backdrop-blur-md px-4 py-2 rounded-full border border-emerald-300 shadow-md flex items-center space-x-2 text-xs font-semibold text-slate-700 animate-pulse">
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+            <span>{lang === 'hi' ? 'ज़िला टेलीमेट्री एवं नोड्स लोड हो रहे हैं...' : 'Loading district telemetry nodes...'}</span>
+          </div>
+        )}
+
         {/* 3. Floating Desktop Left Intelligence Panel */}
         <div className={`hidden sm:block absolute top-4 left-4 z-20 w-80 lg:w-96 max-h-[calc(100%-32px)] overflow-y-auto bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/90 shadow-2xl p-5 transition-all duration-300 ${
           selectedDistrict ? 'ring-2 ring-teal-500' : ''
